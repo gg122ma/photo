@@ -1,0 +1,2038 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wander Archive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg: #F7F4EF;
+  --ink: #1A1917;
+  --muted: #A09A8E;
+  --accent: #C4956A;
+  --accent-deep: #A67B52;
+  --border: #E5DFD5;
+  --serif: 'Cormorant Garamond', Georgia, serif;
+  --mono: 'DM Mono', 'Courier New', monospace;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+::selection { background:var(--accent); color:#fff; }
+html { -webkit-font-smoothing: antialiased; scroll-behavior:smooth; }
+body {
+  background:var(--bg); color:var(--ink);
+  font-family:var(--mono); overflow-x:hidden; min-height:100vh;
+}
+body::after {
+  content:''; position:fixed; inset:0; z-index:99998;
+  pointer-events:none; opacity:.025;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:150px;
+}
+
+/* ============ CURSOR ============ */
+.cur {
+  position:fixed; width:6px; height:6px;
+  background:var(--ink); border-radius:50%;
+  pointer-events:none; z-index:99999;
+  transform:translate(-50%,-50%);
+  mix-blend-mode:difference; opacity:0;
+  transition:width .35s var(--spring),height .35s var(--spring),background .3s ease;
+}
+.cur.on { opacity:1; }
+.cur.big { width:48px; height:48px; background:rgba(255,255,255,.85); }
+@media(hover:none){.cur{display:none!important}body{cursor:auto}}
+
+/* ============ NAV ============ */
+.nav {
+  position:fixed; top:0; left:0; right:0; z-index:5000;
+  display:flex; justify-content:space-between; align-items:center;
+  padding:0 2.5rem; height:60px;
+  background:rgba(247,244,239,.92); backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);
+  transition:transform .4s var(--ease);
+}
+.nav.hide { transform:translateY(-100%); }
+.logo {
+  font-family:var(--serif); font-size:1.2rem; font-weight:400;
+  letter-spacing:.04em; cursor:pointer;
+}
+.logo:hover { opacity:.7; }
+.logo-dot {
+  display:inline-block; width:5px; height:5px;
+  background:var(--accent); border-radius:50%;
+  margin-left:2px; vertical-align:super;
+}
+.nav-c {
+  position:absolute; left:50%; transform:translateX(-50%);
+  display:flex; gap:2.5rem;
+}
+.nlink {
+  font-family:var(--mono); font-size:10px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--muted); cursor:pointer;
+  position:relative; transition:color .3s ease;
+}
+.nlink::after {
+  content:''; position:absolute; bottom:-2px; left:0;
+  width:0; height:1px; background:var(--accent);
+  transition:width .4s var(--ease);
+}
+.nlink:hover,.nlink.on { color:var(--ink); }
+.nlink.on::after,.nlink:hover::after { width:100%; }
+.nav-r { display:flex; align-items:center; gap:1rem; }
+
+/* Region Filter Dropdown on Nav */
+.nlink-wrap { position:relative; }
+.region-dd {
+  position:absolute; top:calc(100% + 16px); left:50%;
+  transform:translateX(-50%) translateY(-6px);
+  background:#fff; border:1px solid var(--border);
+  border-radius:6px; box-shadow:0 16px 48px rgba(0,0,0,.08);
+  padding:.6rem .5rem; min-width:180px;
+  opacity:0; visibility:hidden;
+  transition:all .3s var(--ease);
+  z-index:5002;
+  display:flex; flex-direction:column; gap:.25rem;
+}
+.nlink-wrap:hover .region-dd,
+.nlink-wrap.open .region-dd {
+  opacity:1; visibility:visible; transform:translateX(-50%) translateY(0);
+}
+.region-dd::before {
+  content:''; position:absolute; top:-10px; left:0; right:0; height:10px;
+}
+.region-pill {
+  font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted);
+  background:none; border:1px solid transparent;
+  border-radius:20px; padding:.35rem .9rem;
+  cursor:pointer; transition:all .25s ease;
+  text-align:left; white-space:nowrap;
+}
+.region-pill:hover { color:var(--ink); background:var(--bg); border-color:var(--border); }
+.region-pill.on { color:var(--accent); border-color:var(--accent); background:rgba(196,149,106,.06); font-weight:500; }
+
+/* Lang */
+.lang-s { position:relative; }
+.lang-b {
+  display:flex; align-items:center; gap:.35rem;
+  font-family:var(--mono); font-size:10px;
+  letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted); background:none;
+  border:1px solid var(--border); border-radius:20px;
+  padding:.3rem .8rem; cursor:pointer; transition:all .3s ease;
+}
+.lang-b:hover { border-color:var(--accent); color:var(--ink); }
+.lang-b svg { width:10px; height:10px; transition:transform .3s var(--ease); }
+.lang-s.open .lang-b svg { transform:rotate(180deg); }
+.lang-dd {
+  position:absolute; top:calc(100% + 8px); right:0;
+  background:#fff; border:1px solid var(--border);
+  border-radius:4px; box-shadow:0 12px 40px rgba(0,0,0,.07);
+  min-width:130px; overflow:hidden;
+  opacity:0; visibility:hidden; transform:translateY(-6px);
+  transition:all .25s var(--ease);
+}
+.lang-s.open .lang-dd { opacity:1; visibility:visible; transform:translateY(0); }
+.lang-o {
+  display:block; width:100%; padding:.55rem 1rem;
+  font-family:var(--mono); font-size:10px;
+  letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted); background:none; border:none;
+  text-align:left; cursor:pointer; transition:all .2s ease;
+}
+.lang-o:hover { background:var(--bg); color:var(--ink); }
+.lang-o.on { color:var(--accent); font-weight:500; }
+
+/* FIX: btn-in is now the logged-out state trigger */
+.btn-in {
+  font-family:var(--mono); font-size:10px;
+  letter-spacing:.12em; text-transform:uppercase;
+  color:#fff; background:var(--ink);
+  border:none; border-radius:20px;
+  padding:.4rem 1.1rem; cursor:pointer;
+  transition:all .3s var(--ease);
+}
+.btn-in:hover { background:var(--accent); transform:translateY(-1px); }
+
+/* User avatar / logout button */
+.user-btn {
+  display:flex; align-items:center; gap:.5rem;
+  font-family:var(--mono); font-size:10px;
+  letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted); background:none;
+  border:1px solid var(--border); border-radius:20px;
+  padding:.3rem .8rem; cursor:pointer; transition:all .3s ease;
+}
+.user-btn:hover { border-color:var(--accent); color:var(--ink); }
+.user-avatar {
+  width:20px; height:20px; border-radius:50%;
+  background:var(--accent); display:flex; align-items:center;
+  justify-content:center; color:#fff; font-size:9px; font-weight:600;
+  flex-shrink:0;
+}
+.user-btn.admin-btn { border-color:var(--accent); }
+.user-btn.admin-btn .user-avatar { background:var(--accent-deep); }
+
+/* Mobile */
+.mob-btn {
+  display:none; background:none; border:none;
+  width:28px; height:18px; position:relative; cursor:pointer;
+}
+.mob-btn span {
+  display:block; width:100%; height:1.5px;
+  background:var(--ink); position:absolute; left:0;
+  transition:all .3s var(--ease);
+}
+.mob-btn span:nth-child(1){top:0}
+.mob-btn span:nth-child(2){top:50%;transform:translateY(-50%)}
+.mob-btn span:nth-child(3){bottom:0}
+.mob-btn.open span:nth-child(1){top:50%;transform:translateY(-50%) rotate(45deg)}
+.mob-btn.open span:nth-child(2){opacity:0}
+.mob-btn.open span:nth-child(3){bottom:50%;transform:translateY(50%) rotate(-45deg)}
+
+@media(max-width:768px){
+  .nav{padding:0 1.25rem}
+  .mob-btn{display:block}
+  .nav-c{
+    position:fixed; inset:0; background:var(--bg);
+    flex-direction:column; justify-content:center;
+    opacity:0; visibility:hidden;
+    transition:all .4s var(--ease); z-index:4999;
+  }
+  .nav-c.open{opacity:1;visibility:visible}
+  .nav-c .nlink{font-size:16px;letter-spacing:.2em}
+  .nav-r{gap:.5rem}
+  .lang-b{padding:.25rem .5rem;font-size:9px}
+  .btn-in{padding:.3rem .7rem;font-size:9px}
+  .user-btn{padding:.25rem .5rem;font-size:9px}
+  .region-dd{position:fixed;top:60px;left:0;right:0;transform:none;border-radius:0;border-left:none;border-right:none;flex-direction:row;flex-wrap:wrap;justify-content:center;padding:.8rem}
+  .nlink-wrap:hover .region-dd,.nlink-wrap.open .region-dd{transform:none}
+}
+
+/* Scroll bar */
+.sbar {
+  position:fixed; top:60px; left:0;
+  height:2px; z-index:5001;
+  background:linear-gradient(90deg,var(--accent),var(--accent-deep));
+  width:0; transition:width .05s linear;
+}
+
+/* ============ PAGES ============ */
+.page { padding-top:60px; min-height:100vh; display:none; }
+.page.active { display:block; animation:pIn .5s var(--ease); }
+@keyframes pIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* ============ HOME ============ */
+.hero {
+  height:60vh; min-height:380px;
+  display:flex; align-items:flex-end;
+  position:relative; overflow:hidden;
+}
+.hero-bg{position:absolute;inset:0}
+.hero-bg img{
+  width:100%;height:100%;object-fit:cover;
+  transform:scale(1.05); animation:hz 22s var(--ease) forwards;
+}
+@keyframes hz{to{transform:scale(1)}}
+.hero-bg::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(to top,var(--bg) 0%,rgba(247,244,239,.35) 50%,transparent 100%);
+}
+.hero-in{
+  position:relative;z-index:1;
+  padding:0 3rem 3.5rem;max-width:700px;
+  opacity:0;animation:fu .9s .3s var(--ease) forwards;
+}
+.hero-lbl{
+  font-family:var(--mono);font-size:9px;
+  letter-spacing:.3em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:.8rem;
+}
+.hero-t{
+  font-family:var(--serif);font-weight:300;
+  font-size:clamp(2.2rem,5vw,3.8rem);
+  line-height:1;letter-spacing:-.02em;margin-bottom:.6rem;
+}
+.hero-t em{font-style:italic;color:var(--accent)}
+.hero-p{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.8}
+@keyframes fu{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+
+/* Stats */
+.stats{
+  display:flex;justify-content:center;gap:4rem;
+  padding:3rem 2rem;border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  max-width:1450px;margin:2rem auto;flex-wrap:wrap;
+}
+.stat-n{font-family:var(--serif);font-weight:300;font-size:2.5rem;color:var(--accent);line-height:1}
+.stat-l{font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-top:.25rem;text-align:center}
+
+/* Home featured — MASONRY */
+.home-strip{padding:4rem 2.5rem 2rem;max-width:1500px;margin:0 auto}
+.strip-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:2rem;flex-wrap:wrap;gap:1rem}
+.strip-lbl{font-family:var(--mono);font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--muted);margin-bottom:.4rem}
+.strip-t{font-family:var(--serif);font-weight:300;font-size:2rem;letter-spacing:-.01em}
+.strip-more{
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--accent);cursor:pointer;display:flex;align-items:center;gap:.5rem;
+  transition:gap .3s var(--ease);
+}
+.strip-more:hover{gap:.8rem}
+.strip-more svg{width:12px;height:12px;flex-shrink:0}
+
+/* MASONRY GRID — CSS columns */
+.masonry-grid{
+  columns:3; column-gap:1.25rem;
+}
+.mcard{
+  break-inside:avoid; margin-bottom:1.25rem;
+  position:relative; overflow:hidden; border-radius:3px;
+  background:var(--border); cursor:pointer;
+  opacity:0; transform:translateY(30px);
+  transition:opacity .7s var(--ease),transform .7s var(--ease);
+}
+.mcard.vis{opacity:1;transform:none}
+.mcard img{
+  width:100%; height:auto; display:block; opacity:0;
+  transition:opacity .6s ease,transform 1.2s var(--ease);
+}
+.mcard img.ld{opacity:1}
+.mcard:hover img{transform:scale(1.03)}
+.mcard::after{
+  content:'';position:absolute;inset:0;
+  background:var(--accent);mix-blend-mode:multiply;
+  opacity:0;transition:opacity .5s ease;pointer-events:none;
+}
+.mcard:hover::after{opacity:.08}
+
+/* Admin edit overlay on cards */
+.mcard-admin{
+  position:absolute; top:.6rem; right:.6rem;
+  display:flex; gap:.35rem; z-index:10;
+  opacity:0; transition:opacity .3s ease;
+  pointer-events:none;
+}
+.mcard:hover .mcard-admin{opacity:1; pointer-events:auto;}
+.mcard-admin button{
+  width:28px; height:28px; border-radius:50%;
+  background:rgba(255,255,255,.92); border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:all .2s ease;
+  color:var(--ink);
+}
+.mcard-admin button:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+.mcard-admin button svg{width:12px;height:12px}
+
+/* Region badge on cards */
+.region-badge{
+  position:absolute; bottom:.6rem; left:.6rem;
+  font-family:var(--mono); font-size:8px; letter-spacing:.12em;
+  text-transform:uppercase; color:#fff;
+  background:rgba(26,25,23,.55); backdrop-filter:blur(6px);
+  padding:.2rem .6rem; border-radius:12px;
+  pointer-events:none; z-index:5;
+}
+
+@media(max-width:1024px){.masonry-grid{columns:2}}
+@media(max-width:600px){
+  .masonry-grid{columns:1}
+  .hero-in{padding:0 1.5rem 2.5rem}
+  .home-strip{padding:3rem 1.5rem 1.5rem}
+}
+
+/* ============ GALLERY ============ */
+.gal-head{padding:4rem 2.5rem 1rem;max-width:1500px;margin:0 auto}
+.gal-head h1{font-family:var(--serif);font-weight:300;font-size:clamp(2rem,4vw,3rem);letter-spacing:-.015em;margin-bottom:.5rem}
+.gal-head p{font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.8;max-width:500px}
+
+/* Gallery filter bar */
+.gal-filter{
+  padding:1rem 2.5rem 0; max-width:1500px; margin:0 auto;
+  display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;
+}
+.gal-filter-label{
+  font-family:var(--mono); font-size:9px; letter-spacing:.15em;
+  text-transform:uppercase; color:var(--muted); margin-right:.5rem;
+}
+.gal-filter-pill{
+  font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted);
+  background:none; border:1px solid var(--border);
+  border-radius:20px; padding:.3rem .9rem;
+  cursor:pointer; transition:all .25s ease;
+}
+.gal-filter-pill:hover{color:var(--ink);border-color:var(--accent)}
+.gal-filter-pill.on{color:#fff;background:var(--ink);border-color:var(--ink)}
+
+.gal-content{padding:2rem 2rem 5rem;max-width:1500px;margin:0 auto}
+.gal-masonry{
+  columns:4; column-gap:1.25rem;
+}
+.gcard{
+  break-inside:avoid; margin-bottom:1.25rem;
+  position:relative; overflow:hidden; border-radius:3px;
+  background:var(--border); cursor:pointer;
+  opacity:0; transform:translateY(30px);
+  transition:opacity .7s var(--ease),transform .7s var(--ease);
+}
+.gcard.vis{opacity:1;transform:none}
+.gcard img{
+  width:100%; height:auto; display:block; opacity:0;
+  transition:opacity .6s ease,transform 1.5s var(--ease);
+}
+.gcard img.ld{opacity:1}
+.gcard:hover img{transform:scale(1.04)}
+.gcard::after{
+  content:'';position:absolute;inset:0;
+  background:var(--accent);mix-blend-mode:multiply;
+  opacity:0;transition:opacity .5s ease;pointer-events:none;
+}
+.gcard:hover::after{opacity:.08}
+.gcard-admin{
+  position:absolute; top:.6rem; right:.6rem;
+  display:flex; gap:.35rem; z-index:10;
+  opacity:0; transition:opacity .3s ease; pointer-events:none;
+}
+.gcard:hover .gcard-admin{opacity:1; pointer-events:auto;}
+.gcard-admin button{
+  width:28px; height:28px; border-radius:50%;
+  background:rgba(255,255,255,.92); border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:all .2s ease; color:var(--ink);
+}
+.gcard-admin button:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+.gcard-admin button svg{width:12px;height:12px}
+.gcard .region-badge{pointer-events:none}
+
+@media(max-width:1024px){.gal-masonry{columns:3}}
+@media(max-width:768px){.gal-masonry{columns:2}}
+@media(max-width:640px){
+  .gal-masonry{columns:1}
+  .gal-content{padding:2rem 1.25rem 4rem}
+  .gal-head{padding:3rem 1.25rem 1rem}
+  .gal-filter{padding:1rem 1.25rem 0}
+}
+
+/* ============ ABOUT ============ */
+.about-wrap{max-width:1100px;margin:0 auto;padding:5rem 2.5rem 6rem}
+.about-hero{display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:center;margin-bottom:6rem}
+.about-photo{
+  position:relative;border-radius:3px;overflow:hidden;
+  aspect-ratio:3/4;background:var(--border);
+}
+.about-photo img{width:100%;height:100%;object-fit:cover}
+.about-photo::after{
+  content:'';position:absolute;top:1.5rem;right:1.5rem;bottom:1.5rem;left:1.5rem;
+  border:1px solid rgba(255,255,255,.25);border-radius:2px;pointer-events:none;
+}
+.about-text h2{
+  font-family:var(--serif);font-weight:300;font-size:2.5rem;
+  letter-spacing:-.01em;margin-bottom:.5rem;
+}
+.about-sub{
+  font-family:var(--mono);font-size:10px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:2rem;
+}
+.about-text p{
+  font-family:var(--mono);font-size:12px;line-height:2;
+  color:var(--ink);opacity:.75;margin-bottom:1.5rem;
+}
+.about-line{width:40px;height:1px;background:var(--accent);margin:2rem 0}
+
+.about-vals{display:grid;grid-template-columns:repeat(3,1fr);gap:2.5rem;padding-top:3rem;border-top:1px solid var(--border)}
+.val{padding:2rem 0}
+.val-ico{
+  width:32px;height:32px;border:1.5px solid var(--accent);
+  border-radius:50%;display:flex;align-items:center;justify-content:center;
+  margin-bottom:1.2rem;color:var(--accent);
+}
+.val-ico svg{width:14px;height:14px}
+.val h4{font-family:var(--serif);font-weight:400;font-size:1.2rem;margin-bottom:.5rem}
+.val p{font-family:var(--mono);font-size:11px;line-height:1.9;color:var(--muted)}
+
+.about-journey{margin-top:6rem}
+.about-journey h3{
+  font-family:var(--serif);font-weight:300;font-size:2rem;
+  letter-spacing:-.01em;margin-bottom:2rem;
+}
+.journey-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem}
+.jcard{
+  position:relative;overflow:hidden;border-radius:3px;
+  background:var(--border);aspect-ratio:1/1;cursor:pointer;
+  opacity:0;transform:translateY(30px);
+  transition:opacity .7s var(--ease),transform .7s var(--ease);
+}
+.jcard.vis{opacity:1;transform:none}
+.jcard img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .6s ease,transform 1.2s var(--ease)}
+.jcard img.ld{opacity:1}
+.jcard:hover img{transform:scale(1.06)}
+.jcard::after{content:'';position:absolute;inset:0;background:var(--accent);mix-blend-mode:multiply;opacity:0;transition:opacity .5s ease;pointer-events:none}
+.jcard:hover::after{opacity:.08}
+
+/* Admin edit indicator on About section */
+.about-editable{position:relative}
+.about-editable .edit-indicator{
+  position:absolute; top:-.5rem; right:-.5rem;
+  width:24px; height:24px; border-radius:50%;
+  background:var(--accent); color:#fff;
+  display:none; align-items:center; justify-content:center;
+  cursor:pointer; font-size:11px; z-index:5;
+  transition:transform .2s ease;
+}
+.about-editable:hover .edit-indicator{display:flex}
+.about-editable .edit-indicator:hover{transform:scale(1.15)}
+
+@media(max-width:768px){
+  .about-hero{grid-template-columns:1fr;gap:2rem}
+  .about-vals{grid-template-columns:1fr;gap:1.5rem}
+  .journey-grid{grid-template-columns:repeat(2,1fr)}
+  .about-wrap{padding:3rem 1.5rem 4rem}
+}
+
+/* ============ LIGHTBOX ============ */
+.lb{
+  position:fixed;inset:0;z-index:10000;
+  background:rgba(247,244,239,.96);backdrop-filter:blur(24px);
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;visibility:hidden;transition:all .4s var(--ease);
+}
+.lb.on{opacity:1;visibility:visible}
+.lb-x{
+  position:fixed;top:1.5rem;right:1.5rem;z-index:10001;
+  width:44px;height:44px;background:#fff;
+  border:1px solid var(--border);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--ink);transition:all .3s ease;
+}
+.lb-x:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+.lb-x svg{width:14px;height:14px}
+.lb-a{
+  position:fixed;top:50%;transform:translateY(-50%);z-index:10001;
+  width:44px;height:44px;background:#fff;
+  border:1px solid var(--border);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--ink);transition:all .3s ease;
+}
+.lb-a:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+.lb-a svg{width:14px;height:14px}
+.lb-pl{left:1.5rem}
+.lb-pr{right:1.5rem}
+.lb-img{
+  max-width:85vw;max-height:85vh;object-fit:contain;
+  border-radius:4px;box-shadow:0 24px 60px rgba(0,0,0,.1);
+  transition:opacity .3s ease;
+}
+.lb-ct{
+  position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);
+  z-index:10001;font-family:var(--mono);font-size:10px;
+  letter-spacing:.15em;text-transform:uppercase;color:var(--muted);
+}
+
+/* Footer */
+.ft{
+  border-top:1px solid var(--border);
+  padding:2.5rem;max-width:1500px;margin:0 auto;
+  display:flex;justify-content:space-between;
+  align-items:flex-end;flex-wrap:wrap;gap:1rem;
+}
+.ft-b{font-family:var(--serif);font-size:1.15rem;font-weight:300;margin-bottom:.2rem}
+.ft-t{font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+.ft-c{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--muted)}
+
+/* ============ AUTH MODAL ============ */
+.auth-overlay{
+  position:fixed;inset:0;z-index:20000;
+  background:rgba(26,25,23,.6);backdrop-filter:blur(8px);
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;visibility:hidden;transition:all .35s var(--ease);
+}
+.auth-overlay.on{opacity:1;visibility:visible}
+.auth-box{
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:8px;padding:3rem 2.5rem;
+  width:min(420px,92vw);
+  box-shadow:0 32px 80px rgba(0,0,0,.12);
+  transform:translateY(20px);
+  transition:transform .4s var(--ease);
+  position:relative;
+}
+.auth-overlay.on .auth-box{transform:translateY(0)}
+.auth-close{
+  position:absolute;top:1.2rem;right:1.2rem;
+  width:32px;height:32px;border-radius:50%;
+  background:none;border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--muted);transition:all .2s ease;
+}
+.auth-close:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+.auth-close svg{width:12px;height:12px}
+.auth-title{
+  font-family:var(--serif);font-weight:300;font-size:2rem;
+  letter-spacing:-.01em;margin-bottom:.3rem;
+}
+.auth-sub{
+  font-family:var(--mono);font-size:10px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:2rem;
+}
+.auth-tabs{display:flex;gap:0;margin-bottom:2rem;border-bottom:1px solid var(--border)}
+.auth-tab{
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);
+  background:none;border:none;cursor:pointer;
+  padding:.6rem 1.2rem .8rem;position:relative;
+  transition:color .2s ease;
+}
+.auth-tab::after{
+  content:'';position:absolute;bottom:-1px;left:0;right:0;
+  height:2px;background:var(--accent);
+  transform:scaleX(0);transition:transform .3s var(--ease);
+}
+.auth-tab.on{color:var(--ink)}
+.auth-tab.on::after{transform:scaleX(1)}
+.auth-field{margin-bottom:1.2rem}
+.auth-field label{
+  display:block;font-family:var(--mono);font-size:9px;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--muted);
+  margin-bottom:.5rem;
+}
+.auth-field input,.auth-field select,.auth-field textarea{
+  width:100%;padding:.75rem 1rem;
+  font-family:var(--mono);font-size:12px;color:var(--ink);
+  background:#fff;border:1px solid var(--border);border-radius:4px;
+  outline:none;transition:border-color .2s ease;
+}
+.auth-field input:focus,.auth-field select:focus,.auth-field textarea:focus{border-color:var(--accent)}
+.auth-field input::placeholder,.auth-field textarea::placeholder{color:var(--muted)}
+.auth-field textarea{resize:vertical;min-height:80px}
+.auth-field select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='none' stroke='%23A09A8E' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .8rem center;background-size:12px}
+.auth-err{
+  font-family:var(--mono);font-size:10px;color:#c0392b;
+  margin-bottom:1rem;min-height:1.2em;letter-spacing:.02em;
+  display:none;
+}
+.auth-err.show{display:block}
+.auth-ok{
+  font-family:var(--mono);font-size:10px;color:#27ae60;
+  margin-bottom:1rem;min-height:1.2em;letter-spacing:.02em;
+  display:none;
+}
+.auth-ok.show{display:block}
+.auth-submit{
+  width:100%;padding:.85rem;
+  font-family:var(--mono);font-size:10px;letter-spacing:.18em;
+  text-transform:uppercase;color:#fff;
+  background:var(--ink);border:none;border-radius:4px;
+  cursor:pointer;transition:all .3s var(--ease);
+  position:relative;overflow:hidden;
+}
+.auth-submit:hover{background:var(--accent)}
+.auth-submit:disabled{opacity:.5;cursor:not-allowed}
+.auth-divider{
+  display:flex;align-items:center;gap:1rem;margin:1.5rem 0;
+}
+.auth-divider::before,.auth-divider::after{
+  content:'';flex:1;height:1px;background:var(--border);
+}
+.auth-divider span{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.1em}
+
+/* ============ ADMIN PANEL MODAL ============ */
+.admin-overlay{
+  position:fixed;inset:0;z-index:20000;
+  background:rgba(26,25,23,.6);backdrop-filter:blur(8px);
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;visibility:hidden;transition:all .35s var(--ease);
+}
+.admin-overlay.on{opacity:1;visibility:visible}
+.admin-box{
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:8px;padding:2.5rem;
+  width:min(560px,94vw); max-height:90vh; overflow-y:auto;
+  box-shadow:0 32px 80px rgba(0,0,0,.12);
+  transform:translateY(20px);
+  transition:transform .4s var(--ease);
+  position:relative;
+}
+.admin-overlay.on .admin-box{transform:translateY(0)}
+.admin-close{
+  position:absolute;top:1.2rem;right:1.2rem;
+  width:32px;height:32px;border-radius:50%;
+  background:none;border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--muted);transition:all .2s ease;
+}
+.admin-close:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+.admin-close svg{width:12px;height:12px}
+.admin-title{
+  font-family:var(--serif);font-weight:300;font-size:1.8rem;
+  letter-spacing:-.01em;margin-bottom:.3rem;
+}
+.admin-sub{
+  font-family:var(--mono);font-size:10px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:2rem;
+}
+.admin-tabs{display:flex;gap:0;margin-bottom:2rem;border-bottom:1px solid var(--border)}
+.admin-tab{
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);
+  background:none;border:none;cursor:pointer;
+  padding:.6rem 1.2rem .8rem;position:relative;
+  transition:color .2s ease;
+}
+.admin-tab::after{
+  content:'';position:absolute;bottom:-1px;left:0;right:0;
+  height:2px;background:var(--accent);
+  transform:scaleX(0);transition:transform .3s var(--ease);
+}
+.admin-tab.on{color:var(--ink)}
+.admin-tab.on::after{transform:scaleX(1)}
+.admin-panel{display:none}
+.admin-panel.active{display:block}
+
+/* Cloudinary upload area */
+.upload-zone{
+  border:2px dashed var(--border); border-radius:6px;
+  padding:2.5rem; text-align:center;
+  cursor:pointer; transition:all .3s ease;
+  margin-bottom:1.5rem; position:relative;
+}
+.upload-zone:hover{border-color:var(--accent);background:rgba(196,149,106,.04)}
+.upload-zone.has-img{border-style:solid;border-color:var(--accent)}
+.upload-zone img{
+  max-width:100%; max-height:200px; object-fit:contain;
+  border-radius:4px; margin-bottom:1rem;
+}
+.upload-zone .upload-label{
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);
+}
+.upload-zone .upload-label em{color:var(--accent);font-style:normal}
+.upload-zone input[type="file"]{
+  position:absolute;inset:0;opacity:0;cursor:pointer;
+}
+
+/* About editor textarea */
+.about-editor textarea{
+  width:100%; min-height:100px; padding:.75rem 1rem;
+  font-family:var(--mono); font-size:12px; color:var(--ink);
+  background:#fff; border:1px solid var(--border); border-radius:4px;
+  outline:none; resize:vertical; line-height:1.8;
+  transition:border-color .2s ease; margin-bottom:1rem;
+}
+.about-editor textarea:focus{border-color:var(--accent)}
+.about-editor label{
+  display:block; font-family:var(--mono); font-size:9px;
+  letter-spacing:.2em; text-transform:uppercase;
+  color:var(--muted); margin-bottom:.5rem;
+}
+
+/* Toast notification */
+.toast{
+  position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(20px);
+  z-index:30000;
+  background:var(--ink);color:#fff;
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;padding:.7rem 1.5rem;border-radius:20px;
+  opacity:0;transition:all .35s var(--ease);pointer-events:none;
+  white-space:nowrap;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Photo edit modal inline fields */
+.edit-photo-preview{
+  width:100%; max-height:200px; object-fit:contain;
+  border-radius:4px; margin-bottom:1rem; background:var(--border);
+}
+
+/* Admin add floating button */
+.admin-fab{
+  position:fixed; bottom:2rem; right:2rem; z-index:8000;
+  width:52px; height:52px; border-radius:50%;
+  background:var(--ink); color:#fff; border:none;
+  display:none; align-items:center; justify-content:center;
+  cursor:pointer; box-shadow:0 8px 32px rgba(0,0,0,.18);
+  transition:all .3s var(--ease);
+}
+.admin-fab:hover{background:var(--accent);transform:translateY(-2px);box-shadow:0 12px 40px rgba(0,0,0,.22)}
+.admin-fab svg{width:20px;height:20px}
+.admin-fab.show{display:flex}
+</style>
+</head>
+<body>
+
+<div class="cur" id="cur"></div>
+<div class="sbar" id="sb"></div>
+
+<!-- ============ NAV ============ -->
+<nav class="nav" id="nv">
+  <div class="logo" data-nav="home">Wander Archive<span class="logo-dot"></span></div>
+  <div class="nav-c" id="navc">
+    <span class="nlink on" data-nav="home" data-i="n_home">首页</span>
+    <span class="nlink-wrap">
+      <span class="nlink" data-nav="gallery" data-i="n_gallery">相册</span>
+      <div class="region-dd" id="region-dd-nav">
+        <button class="region-pill on" data-region="all" data-i="r_all">全部</button>
+        <button class="region-pill" data-region="europe" data-i="r_europe">欧洲</button>
+        <button class="region-pill" data-region="singapore" data-i="r_singapore">新加坡</button>
+        <button class="region-pill" data-region="asia" data-i="r_asia">亚洲</button>
+        <button class="region-pill" data-region="americas" data-i="r_americas">美洲</button>
+        <button class="region-pill" data-region="oceania" data-i="r_oceania">大洋洲</button>
+        <button class="region-pill" data-region="africa" data-i="r_africa">非洲</button>
+      </div>
+    </span>
+    <span class="nlink" data-nav="about" data-i="n_about">关于我</span>
+  </div>
+  <div class="nav-r">
+    <div class="lang-s" id="ls">
+      <button class="lang-b" id="lb2">
+        <span id="ll">ZH</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="lang-dd">
+        <button class="lang-o on" data-lang="zh">华文</button>
+        <button class="lang-o" data-lang="en">English</button>
+        <button class="lang-o" data-lang="ms">Melayu</button>
+      </div>
+    </div>
+    <div id="auth-area">
+      <button class="btn-in" id="btn-login" data-i="n_login" data-hover>登录</button>
+    </div>
+    <button class="mob-btn" id="mb"><span></span><span></span><span></span></button>
+  </div>
+</nav>
+
+<!-- ============ HOME ============ -->
+<div class="page active" id="p-home">
+  <section class="hero">
+    <div class="hero-bg">
+      <img src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=1600" alt="">
+    </div>
+    <div class="hero-in">
+      <p class="hero-lbl" data-i="h_lbl">Photography Archive — 2024</p>
+      <h1 class="hero-t" data-i="h_t">Wander <em>Archive</em></h1>
+      <p class="hero-p" data-i="h_p">跨越七大洲的镜头记忆 — 每一帧都是光影凝固的旅程</p>
+    </div>
+  </section>
+
+  <div class="stats">
+    <div style="text-align:center"><div class="stat-n" id="stat-countries">12</div><div class="stat-l" data-i="s_c">个国家</div></div>
+    <div style="text-align:center"><div class="stat-n" id="stat-photos">48</div><div class="stat-l" data-i="s_p">张照片</div></div>
+    <div style="text-align:center"><div class="stat-n">3</div><div class="stat-l" data-i="s_co">大洲</div></div>
+    <div style="text-align:center"><div class="stat-n">2024</div><div class="stat-l" data-i="s_y">年度档案</div></div>
+  </div>
+
+  <section class="home-strip">
+    <div class="strip-head">
+      <div>
+        <p class="strip-lbl" data-i="ft_lbl">精选作品</p>
+        <h2 class="strip-t">Latest Captures</h2>
+      </div>
+      <span class="strip-more" data-nav="gallery">
+        <span data-i="ft_more">查看全部</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </span>
+    </div>
+    <div class="masonry-grid" id="hgrid"></div>
+  </section>
+
+  <footer class="ft">
+    <div><div class="ft-b">Wander Archive</div><div class="ft-t">Fragments of Time &amp; Place</div></div>
+    <div class="ft-c">&copy; <span class="yr"></span></div>
+  </footer>
+</div>
+
+<!-- ============ GALLERY ============ -->
+<div class="page" id="p-gallery">
+  <div class="gal-head">
+    <p class="strip-lbl" data-i="g_lbl">全部作品</p>
+    <h1 data-i="g_t">Photo Archive</h1>
+    <p data-i="g_sub">混乱中的秩序 — 每张照片都是旅途中的一次停留</p>
+  </div>
+  <div class="gal-filter" id="gal-filter">
+    <span class="gal-filter-label" data-i="filter_label">筛选</span>
+    <button class="gal-filter-pill on" data-region="all" data-i="r_all">全部</button>
+    <button class="gal-filter-pill" data-region="europe" data-i="r_europe">欧洲</button>
+    <button class="gal-filter-pill" data-region="singapore" data-i="r_singapore">新加坡</button>
+    <button class="gal-filter-pill" data-region="asia" data-i="r_asia">亚洲</button>
+    <button class="gal-filter-pill" data-region="americas" data-i="r_americas">美洲</button>
+    <button class="gal-filter-pill" data-region="oceania" data-i="r_oceania">大洋洲</button>
+    <button class="gal-filter-pill" data-region="africa" data-i="r_africa">非洲</button>
+  </div>
+  <section class="gal-content">
+    <div class="gal-masonry" id="cgrid"></div>
+  </section>
+  <footer class="ft">
+    <div><div class="ft-b">Wander Archive</div><div class="ft-t">Fragments of Time &amp; Place</div></div>
+    <div class="ft-c">&copy; <span class="yr"></span></div>
+  </footer>
+</div>
+
+<!-- ============ ABOUT ============ -->
+<div class="page" id="p-about">
+  <div class="about-wrap">
+    <div class="about-hero">
+      <div class="about-photo">
+        <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=800" alt="Portrait">
+      </div>
+      <div class="about-text">
+        <h2 class="about-editable" data-field="a_name">
+          <span id="about-name-display" data-i="a_name">陈旅人</span>
+        </h2>
+        <p class="about-sub about-editable" data-field="a_sub">
+          <span id="about-sub-display" data-i="a_sub">Travel Photographer &amp; Storyteller</span>
+        </p>
+        <div class="about-line"></div>
+        <p class="about-editable" data-field="a_p1">
+          <span id="about-p1-display" data-i="a_p1">我是一名旅行摄影师，镜头是我的语言，世界是我的课堂。过去十年间，我走过了三十多个国家，用光影记录了无数被时光遗忘的角落。</span>
+        </p>
+        <p class="about-editable" data-field="a_p2">
+          <span id="about-p2-display" data-i="a_p2">每一段旅程都始于一个简单的疑问——那个转角之后是什么？而每一张照片，都是我与那个瞬间之间无声的对话。</span>
+        </p>
+        <p class="about-editable" data-field="a_p3">
+          <span id="about-p3-display" data-i="a_p3">这个档案馆是我对旅途的回望。希望这些静止的画面，能在你心中唤醒某种渴望出发的冲动。</span>
+        </p>
+      </div>
+    </div>
+
+    <div class="about-vals">
+      <div class="val">
+        <div class="val-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10A15.3 15.3 0 0112 2z"/></svg>
+        </div>
+        <h4 data-i="v1_t">探索</h4>
+        <p data-i="v1_b">走出舒适区，在未知的街道上寻找最真实的光线和故事。</p>
+      </div>
+      <div class="val">
+        <div class="val-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+        </div>
+        <h4 data-i="v2_t">共鸣</h4>
+        <p data-i="v2_b">摄影不是记录，而是感受。让每张照片都能传达按下快门时的心跳。</p>
+      </div>
+      <div class="val">
+        <div class="val-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h4 data-i="v3_t">守护</h4>
+        <p data-i="v3_b">用影像为正在消逝的风景和文化留下一份温柔的见证。</p>
+      </div>
+    </div>
+
+    <div class="about-journey">
+      <h3 data-i="a_jr">旅途足迹</h3>
+      <div class="journey-grid" id="jgrid"></div>
+    </div>
+  </div>
+  <footer class="ft">
+    <div><div class="ft-b">Wander Archive</div><div class="ft-t">Fragments of Time &amp; Place</div></div>
+    <div class="ft-c">&copy; <span class="yr"></span></div>
+  </footer>
+</div>
+
+<!-- ============ LIGHTBOX ============ -->
+<div class="lb" id="lb">
+  <button class="lb-x" id="lbx" data-hover>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+  <button class="lb-a lb-pl" id="lbl" data-hover>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+  <button class="lb-a lb-pr" id="lbr" data-hover>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 6 15 12 9 18"/></svg>
+  </button>
+  <img class="lb-img" id="lbi" src="" alt="">
+  <div class="lb-ct" id="lbc"></div>
+</div>
+
+<!-- ============ AUTH MODAL ============ -->
+<div class="auth-overlay" id="auth-overlay">
+  <div class="auth-box">
+    <button class="auth-close" id="auth-close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <h2 class="auth-title">Wander Archive</h2>
+    <p class="auth-sub" id="auth-sub-text">摄影档案馆</p>
+    <div class="auth-tabs">
+      <button class="auth-tab on" id="tab-login">登录</button>
+      <button class="auth-tab" id="tab-register">注册</button>
+    </div>
+    <div id="auth-err" class="auth-err"></div>
+    <div id="auth-ok" class="auth-ok"></div>
+    <div class="auth-field">
+      <label>邮箱</label>
+      <input type="email" id="auth-email" placeholder="your@email.com" autocomplete="email">
+    </div>
+    <div class="auth-field">
+      <label>密码</label>
+      <input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <div class="auth-field" id="field-confirm" style="display:none">
+      <label>确认密码</label>
+      <input type="password" id="auth-confirm" placeholder="••••••••" autocomplete="new-password">
+    </div>
+    <button class="auth-submit" id="auth-submit">登录</button>
+  </div>
+</div>
+
+<!-- ============ ADMIN PANEL MODAL ============ -->
+<div class="admin-overlay" id="admin-overlay">
+  <div class="admin-box">
+    <button class="admin-close" id="admin-close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <h2 class="admin-title">管理面板</h2>
+    <p class="admin-sub">Admin Panel</p>
+    <div class="admin-tabs">
+      <button class="admin-tab on" data-panel="add-photo">添加照片</button>
+      <button class="admin-tab" data-panel="edit-about">编辑关于</button>
+    </div>
+    <div id="admin-err" class="auth-err"></div>
+    <div id="admin-ok" class="auth-ok"></div>
+
+    <!-- Add Photo Panel -->
+    <div class="admin-panel active" id="panel-add-photo">
+      <div class="upload-zone" id="upload-zone">
+        <div class="upload-label">
+          <em>点击上传</em> 或拖放图片<br>
+          <span style="font-size:9px;opacity:.6;margin-top:.3rem;display:inline-block">连接 Cloudinary · 使用原图</span>
+        </div>
+        <input type="file" id="photo-file" accept="image/*">
+      </div>
+      <div class="auth-field">
+        <label>照片标题</label>
+        <input type="text" id="photo-title" placeholder="例如：巴黎铁塔黄昏">
+      </div>
+      <div class="auth-field">
+        <label>区域</label>
+        <select id="photo-region">
+          <option value="europe">欧洲 Europe</option>
+          <option value="singapore">新加坡 Singapore</option>
+          <option value="asia">亚洲 Asia</option>
+          <option value="americas">美洲 Americas</option>
+          <option value="oceania">大洋洲 Oceania</option>
+          <option value="africa">非洲 Africa</option>
+        </select>
+      </div>
+      <div class="auth-field">
+        <label>国家 / Country</label>
+        <input type="text" id="photo-country" placeholder="例如：France, Japan, Singapore">
+      </div>
+      <button class="auth-submit" id="btn-upload-photo">上传照片</button>
+    </div>
+
+    <!-- Edit About Panel -->
+    <div class="admin-panel" id="panel-edit-about">
+      <div class="about-editor">
+        <label>姓名</label>
+        <textarea id="edit-a-name" rows="1"></textarea>
+        <label>副标题</label>
+        <textarea id="edit-a-sub" rows="1"></textarea>
+        <label>介绍段落 1</label>
+        <textarea id="edit-a-p1" rows="3"></textarea>
+        <label>介绍段落 2</label>
+        <textarea id="edit-a-p2" rows="3"></textarea>
+        <label>介绍段落 3</label>
+        <textarea id="edit-a-p3" rows="3"></textarea>
+      </div>
+      <button class="auth-submit" id="btn-save-about">保存修改</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EDIT PHOTO MODAL ============ -->
+<div class="admin-overlay" id="edit-photo-overlay">
+  <div class="admin-box" style="width:min(440px,92vw)">
+    <button class="admin-close" id="edit-photo-close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <h2 class="admin-title">编辑照片</h2>
+    <p class="admin-sub">Edit Photo</p>
+    <div id="edit-photo-err" class="auth-err"></div>
+    <img class="edit-photo-preview" id="edit-photo-img" src="" alt="">
+    <div class="auth-field">
+      <label>标题</label>
+      <input type="text" id="edit-photo-title">
+    </div>
+    <div class="auth-field">
+      <label>区域</label>
+      <select id="edit-photo-region">
+        <option value="europe">欧洲 Europe</option>
+        <option value="singapore">新加坡 Singapore</option>
+        <option value="asia">亚洲 Asia</option>
+        <option value="americas">美洲 Americas</option>
+        <option value="oceania">大洋洲 Oceania</option>
+        <option value="africa">非洲 Africa</option>
+      </select>
+    </div>
+    <div class="auth-field">
+      <label>国家 / Country</label>
+      <input type="text" id="edit-photo-country" placeholder="例如：France, Japan">
+    </div>
+    <div style="display:flex;gap:.75rem">
+      <button class="auth-submit" id="btn-save-photo" style="flex:1">保存</button>
+      <button class="auth-submit" id="btn-delete-photo" style="flex:1;background:#c0392b">删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ADMIN FAB ============ -->
+<button class="admin-fab" id="admin-fab" data-hover title="管理面板">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// CONFIGURATION
+// ============================================================
+// Supabase
+const SUPABASE_URL = 'https://nadsphhnkejunwqprqjy.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hZHNwaGhua2VqdW53cXBycWp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5Mzk3ODcsImV4cCI6MjA5NDUxNTc4N30.VUGrU_WU-8FKHNrftLxCQQyLTxI4ulXbp-UqqZHjkGo';
+const sb2 = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Cloudinary
+const CLOUDINARY_CLOUD_NAME = 'dqw7ectvo';
+const CLOUDINARY_UPLOAD_PRESET = 'photoLLN';
+
+// Admin emails
+const ADMIN_EMAILS = [
+  'limleenai@gmail.com',
+];
+
+// ============================================================
+// DATA — Photos with region metadata
+// ============================================================
+let PHOTOS = [
+  { id:'p1',  url:'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?q=80&w=1000', title:'东京街头', region:'asia' },
+  { id:'p2',  url:'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=1000', title:'阿尔卑斯山脉', region:'europe' },
+  { id:'p3',  url:'https://images.unsplash.com/photo-1504893524553-b855bce32c67?q=80&w=1000', title:'挪威峡湾', region:'europe' },
+  { id:'p4',  url:'https://images.unsplash.com/photo-1523531294919-4bcd7c65e216?q=80&w=1000', title:'新加坡滨海湾', region:'singapore' },
+  { id:'p5',  url:'https://images.unsplash.com/photo-1518548305-0bff7e9bbe3b?q=80&w=1000', title:'圣托里尼', region:'europe' },
+  { id:'p6',  url:'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?q=80&w=1000', title:'巴黎铁塔', region:'europe' },
+  { id:'p7',  url:'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=1000', title:'瑞士湖泊', region:'europe' },
+  { id:'p8',  url:'https://images.unsplash.com/photo-1493246507139-91e8fad9978e?q=80&w=1000', title:'巴厘岛梯田', region:'asia' },
+  { id:'p9',  url:'https://images.unsplash.com/photo-1528164344705-47542687000d?q=80&w=1000', title:'纽约曼哈顿', region:'americas' },
+  { id:'p10', url:'https://images.unsplash.com/photo-1516483638261-f4dbaf036963?q=80&w=1000', title:'意大利海岸', region:'europe' },
+  { id:'p11', url:'https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=1000', title:'云南山谷', region:'asia' },
+  { id:'p12', url:'https://images.unsplash.com/photo-1531572753322-ad063cecc140?q=80&w=1000', title:'威尼斯运河', region:'europe' },
+];
+
+// About content (editable by admin)
+let ABOUT_CONTENT = {
+  a_name: null,  // null = use i18n default
+  a_sub: null,
+  a_p1: null,
+  a_p2: null,
+  a_p3: null,
+};
+
+// Current region filter
+let currentRegion = 'all';
+
+// ============================================================
+// i18n
+// ============================================================
+const T = {
+  zh: {
+    n_home:'首页', n_gallery:'相册', n_about:'关于我', n_login:'登录', n_logout:'退出',
+    h_lbl:'Photography Archive — 2024',
+    h_t:'Wander <em>Archive</em>',
+    h_p:'跨越七大洲的镜头记忆 — 每一帧都是光影凝固的旅程',
+    s_c:'个国家', s_p:'张照片', s_co:'大洲', s_y:'年度档案',
+    ft_lbl:'精选作品', ft_more:'查看全部',
+    g_lbl:'全部作品', g_t:'Photo Archive',
+    g_sub:'混乱中的秩序 — 每张照片都是旅途中的一次停留',
+    a_name:'陈旅人',
+    a_sub:'Travel Photographer & Storyteller',
+    a_p1:'我是一名旅行摄影师，镜头是我的语言，世界是我的课堂。过去十年间，我走过了三十多个国家，用光影记录了无数被时光遗忘的角落。',
+    a_p2:'每一段旅程都始于一个简单的疑问——那个转角之后是什么？而每一张照片，都是我与那个瞬间之间无声的对话。',
+    a_p3:'这个档案馆是我对旅途的回望。希望这些静止的画面，能在你心中唤醒某种渴望出发的冲动。',
+    v1_t:'探索', v1_b:'走出舒适区，在未知的街道上寻找最真实的光线和故事。',
+    v2_t:'共鸣', v2_b:'摄影不是记录，而是感受。让每张照片都能传达按下快门时的心跳。',
+    v3_t:'守护', v3_b:'用影像为正在消逝的风景和文化留下一份温柔的见证。',
+    a_jr:'旅途足迹',
+    r_all:'全部', r_europe:'欧洲', r_singapore:'新加坡', r_asia:'亚洲',
+    r_americas:'美洲', r_oceania:'大洋洲', r_africa:'非洲',
+    filter_label:'筛选',
+  },
+  en: {
+    n_home:'Home', n_gallery:'Gallery', n_about:'About', n_login:'Sign In', n_logout:'Sign Out',
+    h_lbl:'Photography Archive — 2024',
+    h_t:'Wander <em>Archive</em>',
+    h_p:'Lens memories across seven continents — each frame a journey frozen in light',
+    s_c:'Countries', s_p:'Photos', s_co:'Continents', s_y:'Annual',
+    ft_lbl:'Featured', ft_more:'View All',
+    g_lbl:'Full Collection', g_t:'Photo Archive',
+    g_sub:'Order within chaos — each photo is a pause along the journey',
+    a_name:'Chen Luren',
+    a_sub:'Travel Photographer & Storyteller',
+    a_p1:'I am a travel photographer — my lens is my language, and the world is my classroom. Over the past decade, I have journeyed through more than thirty countries, capturing countless corners forgotten by time.',
+    a_p2:'Every journey begins with a simple question — what lies beyond that turn? And every photograph is a silent dialogue between me and that fleeting moment.',
+    a_p3:'This archive is my reflection on the road. I hope these still images awaken in you some longing to set out.',
+    v1_t:'Explore', v1_b:'Step beyond comfort zones, seeking the truest light and stories on unknown streets.',
+    v2_t:'Resonate', v2_b:'Photography is not documentation — it is feeling. Every frame should convey the heartbeat at the shutter press.',
+    v3_t:'Preserve', v3_b:'Using images to leave a gentle witness to vanishing landscapes and cultures.',
+    a_jr:'Journey Footprints',
+    r_all:'All', r_europe:'Europe', r_singapore:'Singapore', r_asia:'Asia',
+    r_americas:'Americas', r_oceania:'Oceania', r_africa:'Africa',
+    filter_label:'Filter',
+  },
+  ms: {
+    n_home:'Utama', n_gallery:'Galeri', n_about:'Tentang Saya', n_login:'Log Masuk', n_logout:'Log Keluar',
+    h_lbl:'Arkib Fotografi — 2024',
+    h_t:'Wander <em>Archive</em>',
+    h_p:'Kenangan lensa merentasi tujuh benua — setiap bingkai perjalanan dibekukan cahaya',
+    s_c:'Negara', s_p:'Foto', s_co:'Benua', s_y:'Tahunan',
+    ft_lbl:'Pilihan', ft_more:'Lihat Semua',
+    g_lbl:'Koleksi Penuh', g_t:'Arkib Foto',
+    g_sub:'Kekacauan yang tersusun — setiap foto adalah hentian sepanjang perjalanan',
+    a_name:'Chen Luren',
+    a_sub:'Jurugambar Perjalanan & Pencerita',
+    a_p1:'Saya seorang jurugambar perjalanan — lensa saya adalah bahasa saya, dan dunia adalah bilik darjah saya. Sepanjang sedekad, saya telah mengembara ke lebih tiga puluh negara, merakamkan sudut-sudut yang dilupakan masa.',
+    a_p2:'Setiap perjalanan bermula dengan satu soalan mudah — apa yang tersembunyi di sebalik selekoh itu? Dan setiap foto adalah dialog senyap antara saya dan detik itu.',
+    a_p3:'Arkib ini adalah renungan saya terhadap perjalanan. Saya berharap imej-imej ini dapat membangkitkan dalam diri anda keinginan untuk berangkat.',
+    v1_t:'Terokai', v1_b:'Melangkah keluar dari zon selesa, mencari cahaya dan cerita paling tulen di jalanan yang tidak dikenali.',
+    v2_t:'Bergetar', v2_b:'Fotografi bukan dokumentasi — ia adalah perasaan. Setiap rangka harus menyampaikan degupan jantung saat pengatup ditekan.',
+    v3_t:'Pulihara', v3_b:'Menggunakan imej untuk meninggalkan saksi yang lembut terhadap landsap dan budaya yang semakin hilang.',
+    a_jr:'Tapak Kaki Perjalanan',
+    r_all:'Semua', r_europe:'Eropah', r_singapore:'Singapura', r_asia:'Asia',
+    r_americas:'Amerika', r_oceania:'Oceania', r_africa:'Afrika',
+    filter_label:'Tapis',
+  }
+};
+let lang = 'zh';
+
+function applyLang(l) {
+  lang = l;
+  document.querySelectorAll('[data-i]').forEach(el => {
+    const k = el.getAttribute('data-i');
+    if (T[l][k] !== undefined) {
+      // For about fields, only set if no custom content
+      if (['a_name','a_sub','a_p1','a_p2','a_p3'].includes(k) && ABOUT_CONTENT[k]) {
+        el.textContent = ABOUT_CONTENT[k];
+      } else {
+        el.innerHTML = T[l][k];
+      }
+    }
+  });
+  document.getElementById('ll').textContent = l.toUpperCase();
+  document.querySelectorAll('.lang-o').forEach(o =>
+    o.classList.toggle('on', o.getAttribute('data-lang') === l));
+  document.getElementById('tab-login').textContent  = {zh:'登录',en:'Sign In',ms:'Log Masuk'}[l];
+  document.getElementById('tab-register').textContent = {zh:'注册',en:'Register',ms:'Daftar'}[l];
+  updateAuthArea();
+}
+
+function applyAboutContent() {
+  const fields = ['a_name','a_sub','a_p1','a_p2','a_p3'];
+  fields.forEach(k => {
+    if (ABOUT_CONTENT[k]) {
+      const display = document.getElementById('about-' + k.replace('a_','') + '-display');
+      if (display) display.textContent = ABOUT_CONTENT[k];
+    }
+  });
+}
+
+// ============================================================
+// DYNAMIC YEAR
+// ============================================================
+document.querySelectorAll('.yr').forEach(el => el.textContent = new Date().getFullYear());
+
+// ============================================================
+// CURSOR
+// ============================================================
+const cur = document.getElementById('cur');
+let mx=-100,my=-100,cx=-100,cy=-100;
+document.addEventListener('mousemove', e => { mx=e.clientX; my=e.clientY; cur.classList.add('on'); });
+document.addEventListener('mouseleave', () => cur.classList.remove('on'));
+(function tk(){ cx+=(mx-cx)*.12; cy+=(my-cy)*.12; cur.style.left=cx+'px'; cur.style.top=cy+'px'; requestAnimationFrame(tk) })();
+
+function bh() {
+  document.querySelectorAll('[data-hover],.mcard,.gcard,.jcard').forEach(el => {
+    if(el._h) return; el._h=true;
+    el.addEventListener('mouseenter', () => cur.classList.add('big'));
+    el.addEventListener('mouseleave', () => cur.classList.remove('big'));
+  });
+}
+
+// ============================================================
+// SCROLL
+// ============================================================
+const sbEl = document.getElementById('sb'), nv = document.getElementById('nv');
+let ly = 0;
+window.addEventListener('scroll', () => {
+  const h = document.documentElement.scrollHeight - window.innerHeight;
+  sbEl.style.width = h > 0 ? (window.scrollY/h*100)+'%' : '0%';
+  nv.classList.toggle('hide', window.scrollY > ly && window.scrollY > 150);
+  ly = window.scrollY;
+});
+
+// ============================================================
+// ROUTING
+// ============================================================
+let curPage = 'home';
+function go(p) {
+  curPage = p;
+  document.querySelectorAll('.page').forEach(pg => pg.classList.remove('active'));
+  document.getElementById('p-'+p).classList.add('active');
+  document.querySelectorAll('.nlink').forEach(n =>
+    n.classList.toggle('on', n.getAttribute('data-nav') === p));
+  document.getElementById('navc').classList.remove('open');
+  document.getElementById('mb').classList.remove('open');
+  window.scrollTo({top:0, behavior:'smooth'});
+  setTimeout(() => { observeAll(); bh(); }, 80);
+}
+
+// ============================================================
+// RENDER HOME (Masonry)
+// ============================================================
+function renderHome() {
+  const hgrid = document.getElementById('hgrid');
+  hgrid.innerHTML = '';
+  PHOTOS.slice(0, 6).forEach((photo, i) => {
+    const c = document.createElement('div');
+    c.className = 'mcard';
+    c.setAttribute('data-hover','');
+    c.setAttribute('data-idx', i);
+    c.style.transitionDelay = `${i*.08}s`;
+    let adminBtns = '';
+    if (isAdmin()) {
+      adminBtns = `<div class="mcard-admin">
+        <button onclick="event.stopPropagation();openEditPhoto(${i})" title="编辑">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+      </div>`;
+    }
+    const regionLabel = getRegionLabel(photo.region);
+    c.innerHTML = `${adminBtns}<img data-src="${photo.url}" alt="${photo.title||''}" loading="lazy"><span class="region-badge">${regionLabel}</span>`;
+    hgrid.appendChild(c);
+  });
+  updateStats();
+  setTimeout(() => { observeAll(); bh(); }, 50);
+}
+
+// ============================================================
+// RENDER GALLERY (Masonry + Filter)
+// ============================================================
+function renderGallery() {
+  const cgrid = document.getElementById('cgrid');
+  cgrid.innerHTML = '';
+  const filtered = currentRegion === 'all'
+    ? PHOTOS
+    : PHOTOS.filter(p => p.region === currentRegion);
+
+  filtered.forEach((photo, i) => {
+    const origIdx = PHOTOS.indexOf(photo);
+    const c = document.createElement('div');
+    c.className = 'gcard';
+    c.setAttribute('data-hover','');
+    c.setAttribute('data-idx', origIdx);
+    c.style.transitionDelay = `${i*.06}s`;
+    let adminBtns = '';
+    if (isAdmin()) {
+      adminBtns = `<div class="gcard-admin">
+        <button onclick="event.stopPropagation();openEditPhoto(${origIdx})" title="编辑">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+      </div>`;
+    }
+    const regionLabel = getRegionLabel(photo.region);
+    c.innerHTML = `${adminBtns}<img data-src="${photo.url}" alt="${photo.title||''}" loading="lazy"><span class="region-badge">${regionLabel}</span>`;
+    cgrid.appendChild(c);
+  });
+  setTimeout(() => { observeAll(); bh(); }, 50);
+}
+
+function getRegionLabel(region) {
+  const labels = {
+    europe: T[lang].r_europe || '欧洲',
+    singapore: T[lang].r_singapore || '新加坡',
+    asia: T[lang].r_asia || '亚洲',
+    americas: T[lang].r_americas || '美洲',
+    oceania: T[lang].r_oceania || '大洋洲',
+    africa: T[lang].r_africa || '非洲',
+  };
+  return labels[region] || region;
+}
+
+function updateStats() {
+  const countries = new Set(PHOTOS.map(p => p.region)).size;
+  document.getElementById('stat-countries').textContent = countries;
+  document.getElementById('stat-photos').textContent = PHOTOS.length;
+}
+
+// ============================================================
+// RENDER ABOUT JOURNEY GRID
+// ============================================================
+const jgrid = document.getElementById('jgrid');
+PHOTOS.slice(0, 4).forEach((photo, i) => {
+  const c = document.createElement('div');
+  c.className = 'jcard';
+  c.setAttribute('data-hover','');
+  c.setAttribute('data-idx', i);
+  c.innerHTML = `<img data-src="${photo.url}" alt="" loading="lazy">`;
+  jgrid.appendChild(c);
+});
+
+// ============================================================
+// REGION FILTER
+// ============================================================
+function setRegionFilter(region) {
+  currentRegion = region;
+  // Update nav pills
+  document.querySelectorAll('#region-dd-nav .region-pill').forEach(p =>
+    p.classList.toggle('on', p.getAttribute('data-region') === region));
+  // Update gallery pills
+  document.querySelectorAll('#gal-filter .gal-filter-pill').forEach(p =>
+    p.classList.toggle('on', p.getAttribute('data-region') === region));
+  renderGallery();
+}
+
+// ============================================================
+// LAZY + REVEAL
+// ============================================================
+const lazyObs = new IntersectionObserver(es => es.forEach(e => {
+  if(e.isIntersecting) {
+    const img = e.target, s = img.getAttribute('data-src');
+    if(s) { img.src = s; img.onload = () => img.classList.add('ld'); img.removeAttribute('data-src'); }
+    lazyObs.unobserve(img);
+  }
+}), {rootMargin:'400px'});
+
+const revealObs = new IntersectionObserver(es => es.forEach(e => {
+  if(e.isIntersecting) { e.target.classList.add('vis'); revealObs.unobserve(e.target); }
+}), {threshold:.05, rootMargin:'-20px'});
+
+function observeAll() {
+  document.querySelectorAll('img[data-src]').forEach(i => lazyObs.observe(i));
+  document.querySelectorAll('.mcard,.gcard,.jcard').forEach(c => revealObs.observe(c));
+}
+observeAll(); bh();
+
+// ============================================================
+// LIGHTBOX
+// ============================================================
+const lbEl = document.getElementById('lb'), lbi = document.getElementById('lbi'), lbc = document.getElementById('lbc');
+let li = -1;
+let lightboxList = PHOTOS; // can be filtered
+
+function openL(i) {
+  li = i;
+  lightboxList = (curPage === 'gallery' && currentRegion !== 'all')
+    ? PHOTOS.filter(p => p.region === currentRegion)
+    : PHOTOS;
+  updL();
+  lbEl.classList.add('on');
+  document.body.style.overflow='hidden';
+}
+function closeL() { lbEl.classList.remove('on'); document.body.style.overflow=''; }
+function updL() {
+  const photo = lightboxList[li] || PHOTOS[li];
+  lbi.style.opacity='0';
+  setTimeout(() => { lbi.src=photo.url; lbi.onload=()=>lbi.style.opacity='1'; }, 100);
+  lbc.textContent = `${li+1} / ${lightboxList.length}`;
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function showToast(msg, dur=2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+// ============================================================
+// ADMIN CHECK
+// ============================================================
+function isAdmin() {
+  return currentUser && ADMIN_EMAILS.includes(currentUser.email);
+}
+
+// ============================================================
+// AUTH STATE
+// ============================================================
+let currentUser = null;
+
+function updateAuthArea() {
+  const area = document.getElementById('auth-area');
+  const fab = document.getElementById('admin-fab');
+  const logoutLabel = {zh:'退出',en:'Sign Out',ms:'Log Keluar'}[lang];
+  const loginLabel  = T[lang].n_login;
+
+  if (currentUser) {
+    const email = currentUser.email || '';
+    const initial = email.charAt(0).toUpperCase();
+    const adminBadge = isAdmin() ? ' admin-btn' : '';
+    const adminLabel = isAdmin() ? ' · Admin' : '';
+    area.innerHTML = `
+      <button class="user-btn${adminBadge}" id="btn-logout" data-hover>
+        <div class="user-avatar">${initial}</div>
+        <span>${email.split('@')[0]}${adminLabel}</span>
+      </button>`;
+    document.getElementById('btn-logout').addEventListener('click', handleLogout);
+
+    // Show/hide admin FAB
+    if (isAdmin()) {
+      fab.classList.add('show');
+    } else {
+      fab.classList.remove('show');
+    }
+  } else {
+    area.innerHTML = `<button class="btn-in" id="btn-login" data-hover data-i="n_login">${loginLabel}</button>`;
+    document.getElementById('btn-login').addEventListener('click', () => openAuth('login'));
+    fab.classList.remove('show');
+  }
+
+  // Re-render to show/hide admin buttons
+  renderHome();
+  renderGallery();
+  bh();
+}
+
+async function handleLogout() {
+  await sb2.auth.signOut();
+  currentUser = null;
+  updateAuthArea();
+  showToast({zh:'已退出登录',en:'Signed out',ms:'Telah log keluar'}[lang]);
+}
+
+sb2.auth.onAuthStateChange((_event, session) => {
+  currentUser = session?.user ?? null;
+  updateAuthArea();
+});
+
+// ============================================================
+// CLOUDINARY UPLOAD
+// ============================================================
+function uploadToCloudinary(file) {
+  return new Promise((resolve, reject) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`);
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        const res = JSON.parse(xhr.responseText);
+        resolve(res.secure_url);
+      } else {
+        reject(new Error('Upload failed: ' + xhr.statusText));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.send(formData);
+  });
+}
+
+// ============================================================
+// AUTH MODAL
+// ============================================================
+const authOverlay = document.getElementById('auth-overlay');
+let authMode = 'login';
+
+function openAuth(mode='login') {
+  authMode = mode;
+  syncAuthMode();
+  clearAuthMessages();
+  document.getElementById('auth-email').value = '';
+  document.getElementById('auth-password').value = '';
+  document.getElementById('auth-confirm').value = '';
+  authOverlay.classList.add('on');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('auth-email').focus(), 300);
+}
+
+function closeAuth() {
+  authOverlay.classList.remove('on');
+  document.body.style.overflow = '';
+}
+
+function syncAuthMode() {
+  const isLogin = authMode === 'login';
+  document.getElementById('tab-login').classList.toggle('on', isLogin);
+  document.getElementById('tab-register').classList.toggle('on', !isLogin);
+  document.getElementById('field-confirm').style.display = isLogin ? 'none' : 'block';
+  document.getElementById('auth-submit').textContent = isLogin
+    ? {zh:'登录',en:'Sign In',ms:'Log Masuk'}[lang]
+    : {zh:'注册',en:'Create Account',ms:'Cipta Akaun'}[lang];
+}
+
+function clearAuthMessages() {
+  const err = document.getElementById('auth-err');
+  const ok  = document.getElementById('auth-ok');
+  err.textContent = ''; err.classList.remove('show');
+  ok.textContent  = ''; ok.classList.remove('show');
+}
+
+function showAuthErr(msg) {
+  const el = document.getElementById('auth-err');
+  el.textContent = msg; el.classList.add('show');
+}
+function showAuthOk(msg) {
+  const el = document.getElementById('auth-ok');
+  el.textContent = msg; el.classList.add('show');
+}
+
+document.getElementById('tab-login').addEventListener('click', () => { authMode='login'; syncAuthMode(); clearAuthMessages(); });
+document.getElementById('tab-register').addEventListener('click', () => { authMode='register'; syncAuthMode(); clearAuthMessages(); });
+document.getElementById('auth-close').addEventListener('click', closeAuth);
+authOverlay.addEventListener('click', e => { if(e.target === authOverlay) closeAuth(); });
+
+document.getElementById('auth-submit').addEventListener('click', async () => {
+  clearAuthMessages();
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const confirm  = document.getElementById('auth-confirm').value;
+  const btn      = document.getElementById('auth-submit');
+
+  if (!email || !password) { showAuthErr({zh:'请填写邮箱和密码',en:'Please fill in email and password',ms:'Sila isi e-mel dan kata laluan'}[lang]); return; }
+  if (authMode === 'register' && password !== confirm) { showAuthErr({zh:'两次密码不一致',en:'Passwords do not match',ms:'Kata laluan tidak sepadan'}[lang]); return; }
+  if (password.length < 6) { showAuthErr({zh:'密码至少6位',en:'Password must be at least 6 characters',ms:'Kata laluan sekurang-kurangnya 6 aksara'}[lang]); return; }
+
+  btn.disabled = true;
+
+  if (authMode === 'login') {
+    const { error } = await sb2.auth.signInWithPassword({ email, password });
+    if (error) {
+      const msg = error.message.includes('Invalid') || error.message.includes('invalid')
+        ? {zh:'邮箱或密码错误',en:'Invalid email or password',ms:'E-mel atau kata laluan salah'}[lang]
+        : error.message;
+      showAuthErr(msg);
+    } else {
+      closeAuth();
+      const adminMsg = isAdmin()
+        ? {zh:' — 管理员模式已启用',en:' — Admin mode enabled',ms:' — Mod pentadbir diaktifkan'}[lang]
+        : '';
+      showToast(({zh:'登录成功，欢迎回来',en:'Welcome back!',ms:'Selamat kembali!'}[lang]) + adminMsg);
+    }
+  } else {
+    const { error } = await sb2.auth.signUp({ email, password });
+    if (error) {
+      showAuthErr(error.message);
+    } else {
+      showAuthOk({zh:'注册成功！请检查邮箱确认链接',en:'Account created! Check your email to confirm.',ms:'Akaun dicipta! Semak e-mel untuk pengesahan.'}[lang]);
+    }
+  }
+  btn.disabled = false;
+});
+
+// ============================================================
+// ADMIN PANEL
+// ============================================================
+const adminOverlay = document.getElementById('admin-overlay');
+
+function openAdmin() {
+  // Pre-fill about editor
+  document.getElementById('edit-a-name').value = ABOUT_CONTENT.a_name || T[lang].a_name;
+  document.getElementById('edit-a-sub').value  = ABOUT_CONTENT.a_sub  || T[lang].a_sub;
+  document.getElementById('edit-a-p1').value   = ABOUT_CONTENT.a_p1   || T[lang].a_p1;
+  document.getElementById('edit-a-p2').value   = ABOUT_CONTENT.a_p2   || T[lang].a_p2;
+  document.getElementById('edit-a-p3').value   = ABOUT_CONTENT.a_p3   || T[lang].a_p3;
+
+  // Reset upload zone
+  resetUploadZone();
+
+  // Clear messages
+  document.getElementById('admin-err').classList.remove('show');
+  document.getElementById('admin-ok').classList.remove('show');
+
+  adminOverlay.classList.add('on');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeAdmin() {
+  adminOverlay.classList.remove('on');
+  document.body.style.overflow = '';
+}
+
+function resetUploadZone() {
+  const zone = document.getElementById('upload-zone');
+  zone.classList.remove('has-img');
+  zone.querySelector('.upload-label').innerHTML = `<em>点击上传</em> 或拖放图片<br><span style="font-size:9px;opacity:.6;margin-top:.3rem;display:inline-block">连接 Cloudinary · 使用原图</span>`;
+  document.getElementById('photo-file').value = '';
+  document.getElementById('photo-title').value = '';
+}
+
+document.getElementById('admin-close').addEventListener('click', closeAdmin);
+document.getElementById('admin-fab').addEventListener('click', openAdmin);
+adminOverlay.addEventListener('click', e => { if(e.target === adminOverlay) closeAdmin(); });
+
+// Admin tabs
+document.querySelectorAll('.admin-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('on'));
+    document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('on');
+    document.getElementById('panel-' + tab.getAttribute('data-panel')).classList.add('active');
+  });
+});
+
+// File upload preview
+document.getElementById('photo-file').addEventListener('change', function() {
+  if (this.files && this.files[0]) {
+    const file = this.files[0];
+    const zone = document.getElementById('upload-zone');
+    const reader = new FileReader();
+    reader.onload = e => {
+      zone.classList.add('has-img');
+      zone.querySelector('.upload-label').innerHTML = `<img src="${e.target.result}" alt="preview"><br><em>${file.name}</em> · ${(file.size/1024/1024).toFixed(1)}MB`;
+    };
+    reader.readAsDataURL(file);
+  }
+});
+
+// Upload photo
+document.getElementById('btn-upload-photo').addEventListener('click', async () => {
+  const fileInput = document.getElementById('photo-file');
+  const title = document.getElementById('photo-title').value.trim();
+  const region = document.getElementById('photo-region').value;
+  const countryInput = document.getElementById('photo-country');
+  const country = countryInput ? countryInput.value.trim() : '';
+  const errEl = document.getElementById('admin-err');
+  const okEl = document.getElementById('admin-ok');
+  errEl.classList.remove('show'); okEl.classList.remove('show');
+
+  if (!fileInput.files || !fileInput.files[0]) {
+    errEl.textContent = {zh:'请选择图片文件',en:'Please select an image file',ms:'Sila pilih fail imej'}[lang];
+    errEl.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('btn-upload-photo');
+  btn.disabled = true;
+  btn.textContent = {zh:'上传中...',en:'Uploading...',ms:'Memuat naik...'}[lang];
+
+  try {
+    // Upload to Cloudinary (original image, no transformation)
+    const url = await uploadToCloudinary(fileInput.files[0]);
+
+    // Insert into Supabase
+    const newPhoto = await insertPhotoToDB(
+      url,
+      title || {zh:'未命名',en:'Untitled',ms:'Tanpa Tajuk'}[lang],
+      region,
+      country
+    );
+
+    PHOTOS.push(newPhoto);
+
+    // Re-render
+    renderHome();
+    renderGallery();
+
+    okEl.textContent = {zh:'照片上传成功！',en:'Photo uploaded successfully!',ms:'Foto berjaya dimuat naik!'}[lang];
+    okEl.classList.add('show');
+    resetUploadZone();
+
+    showToast({zh:'照片已添加',en:'Photo added',ms:'Foto ditambah'}[lang]);
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.add('show');
+  }
+
+  btn.disabled = false;
+  btn.textContent = {zh:'上传照片',en:'Upload Photo',ms:'Muat Naik Foto'}[lang];
+});
+
+// Save about content
+document.getElementById('btn-save-about').addEventListener('click', () => {
+  ABOUT_CONTENT.a_name = document.getElementById('edit-a-name').value.trim();
+  ABOUT_CONTENT.a_sub  = document.getElementById('edit-a-sub').value.trim();
+  ABOUT_CONTENT.a_p1   = document.getElementById('edit-a-p1').value.trim();
+  ABOUT_CONTENT.a_p2   = document.getElementById('edit-a-p2').value.trim();
+  ABOUT_CONTENT.a_p3   = document.getElementById('edit-a-p3').value.trim();
+
+  saveAboutToStorage();
+  applyAboutContent();
+
+  const okEl = document.getElementById('admin-ok');
+  okEl.textContent = {zh:'关于我内容已更新！',en:'About content updated!',ms:'Kandungan tentang saya dikemas kini!'}[lang];
+  okEl.classList.add('show');
+  setTimeout(() => okEl.classList.remove('show'), 2000);
+
+  showToast({zh:'已保存',en:'Saved',ms:'Disimpan'}[lang]);
+});
+
+// ============================================================
+// EDIT PHOTO MODAL
+// ============================================================
+const editPhotoOverlay = document.getElementById('edit-photo-overlay');
+let editingPhotoIdx = -1;
+
+function openEditPhoto(idx) {
+  editingPhotoIdx = idx;
+  const photo = PHOTOS[idx];
+  document.getElementById('edit-photo-img').src = photo.url;
+  document.getElementById('edit-photo-title').value = photo.title || '';
+  document.getElementById('edit-photo-region').value = photo.region || 'europe';
+  document.getElementById('edit-photo-country').value = photo.country || '';
+  document.getElementById('edit-photo-err').classList.remove('show');
+  editPhotoOverlay.classList.add('on');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeEditPhoto() {
+  editPhotoOverlay.classList.remove('on');
+  document.body.style.overflow = '';
+}
+
+document.getElementById('edit-photo-close').addEventListener('click', closeEditPhoto);
+editPhotoOverlay.addEventListener('click', e => { if(e.target === editPhotoOverlay) closeEditPhoto(); });
+
+// Save photo edits
+document.getElementById('btn-save-photo').addEventListener('click', async () => {
+  if (editingPhotoIdx < 0 || editingPhotoIdx >= PHOTOS.length) return;
+  const photo = PHOTOS[editingPhotoIdx];
+  photo.title = document.getElementById('edit-photo-title').value.trim();
+  photo.region = document.getElementById('edit-photo-region').value;
+  photo.country = document.getElementById('edit-photo-country').value.trim();
+
+  try {
+    await updatePhotoInDB(photo);
+    renderHome();
+    renderGallery();
+    closeEditPhoto();
+    showToast({zh:'照片已更新',en:'Photo updated',ms:'Foto dikemas kini'}[lang]);
+  } catch(err) {
+    document.getElementById('edit-photo-err').textContent = err.message;
+    document.getElementById('edit-photo-err').classList.add('show');
+  }
+});
+
+// Delete photo
+document.getElementById('btn-delete-photo').addEventListener('click', async () => {
+  if (editingPhotoIdx < 0 || editingPhotoIdx >= PHOTOS.length) return;
+  const confirmMsg = {zh:'确定要删除这张照片吗？',en:'Delete this photo?',ms:'Padam foto ini?'}[lang];
+  if (!confirm(confirmMsg)) return;
+
+  const photo = PHOTOS[editingPhotoIdx];
+  try {
+    await deletePhotoFromDB(photo);
+    PHOTOS.splice(editingPhotoIdx, 1);
+    renderHome();
+    renderGallery();
+    closeEditPhoto();
+    showToast({zh:'照片已删除',en:'Photo deleted',ms:'Foto dipadam'}[lang]);
+  } catch(err) {
+    document.getElementById('edit-photo-err').textContent = err.message;
+    document.getElementById('edit-photo-err').classList.add('show');
+  }
+});
+
+// ============================================================
+// LOCAL STORAGE PERSISTENCE (About content only)
+// ============================================================
+function saveAboutToStorage() {
+  try {
+    localStorage.setItem('wa_about', JSON.stringify(ABOUT_CONTENT));
+  } catch(e) { console.warn('Storage save failed', e); }
+}
+
+function loadAboutFromStorage() {
+  try {
+    const saved = localStorage.getItem('wa_about');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      Object.assign(ABOUT_CONTENT, parsed);
+    }
+  } catch(e) { console.warn('Storage load failed', e); }
+}
+
+// ============================================================
+// SUPABASE PHOTOS CRUD
+// ============================================================
+
+// Map Supabase row → frontend photo object
+function mapRow(row) {
+  const regionMap = {
+    'europe':'europe','asia':'singapore','north america':'americas',
+    'south america':'americas','oceania':'oceania','africa':'africa',
+  };
+  const c = (row.continent || '').toLowerCase();
+  // If country is Singapore, force region to singapore
+  let region = regionMap[c] || 'europe';
+  if ((row.country || '').toLowerCase() === 'singapore') region = 'singapore';
+  return {
+    id: 'db_' + row.id,
+    dbId: row.id,
+    url: row.url,
+    title: row.title || '',
+    region: region,
+    country: row.country || '',
+    description: row.description || '',
+    location: row.location || '',
+  };
+}
+
+// Region → continent for Supabase writes
+function regionToContinent(region) {
+  const m = {europe:'Europe',singapore:'Asia',asia:'Asia',americas:'North America',oceania:'Oceania',africa:'Africa'};
+  return m[region] || 'Europe';
+}
+
+// Load photos from Supabase
+async function loadPhotosFromDB() {
+  try {
+    const { data, error } = await sb2
+      .from('photos')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      PHOTOS = data.map(mapRow);
+    }
+    // else keep default hardcoded photos
+  } catch(e) {
+    console.warn('Supabase load failed, using defaults:', e.message);
+  }
+}
+
+// Insert photo to Supabase, returns mapped photo
+async function insertPhotoToDB(url, title, region, country) {
+  const { data, error } = await sb2
+    .from('photos')
+    .insert({
+      url: url,
+      title: title,
+      country: country || '',
+      continent: regionToContinent(region),
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapRow(data);
+}
+
+// Update photo in Supabase
+async function updatePhotoInDB(photo) {
+  if (!photo.dbId) return;
+  const { error } = await sb2
+    .from('photos')
+    .update({
+      title: photo.title,
+      country: photo.country || '',
+      continent: regionToContinent(photo.region),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', photo.dbId);
+
+  if (error) throw error;
+}
+
+// Delete photo from Supabase
+async function deletePhotoFromDB(photo) {
+  if (!photo.dbId) return;
+  const { error } = await sb2
+    .from('photos')
+    .delete()
+    .eq('id', photo.dbId);
+
+  if (error) throw error;
+}
+
+// ============================================================
+// EVENTS
+// ============================================================
+document.addEventListener('click', e => {
+  // nav links
+  const nav = e.target.closest('[data-nav]');
+  if(nav) {
+    const page = nav.getAttribute('data-nav');
+    go(page);
+    if (page === 'gallery') renderGallery();
+    return;
+  }
+
+  // photo cards → lightbox
+  const card = e.target.closest('.mcard,.gcard,.jcard');
+  if(card) { openL(parseInt(card.getAttribute('data-idx'))); return; }
+
+  // lightbox controls
+  if(e.target.closest('#lbx') || e.target === lbEl) { closeL(); return; }
+  if(e.target.closest('#lbr')) { li=(li+1)%lightboxList.length; updL(); return; }
+  if(e.target.closest('#lbl')) { li=(li-1+lightboxList.length)%lightboxList.length; updL(); return; }
+
+  // language dropdown
+  if(e.target.closest('#lb2')) { document.getElementById('ls').classList.toggle('open'); return; }
+  const langOpt = e.target.closest('.lang-o');
+  if(langOpt) { applyLang(langOpt.getAttribute('data-lang')); document.getElementById('ls').classList.remove('open'); return; }
+  if(!e.target.closest('#ls')) document.getElementById('ls').classList.remove('open');
+
+  // region filter pills (nav)
+  const navPill = e.target.closest('#region-dd-nav .region-pill');
+  if(navPill) {
+    setRegionFilter(navPill.getAttribute('data-region'));
+    // Navigate to gallery if not there
+    if (curPage !== 'gallery') go('gallery');
+    return;
+  }
+
+  // region filter pills (gallery)
+  const galPill = e.target.closest('#gal-filter .gal-filter-pill');
+  if(galPill) {
+    setRegionFilter(galPill.getAttribute('data-region'));
+    return;
+  }
+
+  // close mobile menu
+  if(!e.target.closest('#nv')) {
+    document.getElementById('mb').classList.remove('open');
+    document.getElementById('navc').classList.remove('open');
+  }
+});
+
+document.getElementById('mb').addEventListener('click', e => {
+  e.stopPropagation();
+  document.getElementById('mb').classList.toggle('open');
+  document.getElementById('navc').classList.toggle('open');
+});
+
+document.addEventListener('keydown', e => {
+  if(lbEl.classList.contains('on')) {
+    if(e.key==='Escape') closeL();
+    if(e.key==='ArrowRight') { li=(li+1)%lightboxList.length; updL(); }
+    if(e.key==='ArrowLeft') { li=(li-1+lightboxList.length)%lightboxList.length; updL(); }
+    return;
+  }
+  if(authOverlay.classList.contains('on') && e.key==='Escape') closeAuth();
+  if(adminOverlay.classList.contains('on') && e.key==='Escape') closeAdmin();
+  if(editPhotoOverlay.classList.contains('on') && e.key==='Escape') closeEditPhoto();
+});
+
+// Enter key for auth
+document.addEventListener('keydown', e => {
+  if (authOverlay.classList.contains('on') && e.key === 'Enter') {
+    document.getElementById('auth-submit').click();
+  }
+});
+
+// ============================================================
+// INIT
+// ============================================================
+(async function init() {
+  loadAboutFromStorage();
+  applyLang('zh');
+  applyAboutContent();
+  renderHome();
+  renderGallery();
+
+  // Load photos from Supabase (overrides defaults if data exists)
+  await loadPhotosFromDB();
+  renderHome();
+  renderGallery();
+})();
+</script>
+</body>
+</html>
